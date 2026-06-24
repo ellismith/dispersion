@@ -1,0 +1,13 @@
+dglm/checkpoints/
+dglm/logs/
+dglm/figures/
+gene_variance/results_log/
+gene_variance/results_raw/
+plotting_scripts/figures/
+*.rds
+*.RDS
+*.tsv
+*.csv
+*.png
+*.pdf
+*.h5ad
