@@ -17,3 +17,9 @@ dglm/*/checkpoints/
 dglm/*/figures/
 __pycache__/
 *.pyc
+gene_variance/logs/
+dglm/*/logs/
+dglm/*/checkpoints/
+dglm/*/figures/
+__pycache__/
+*.pyc
