@@ -12,7 +12,9 @@ compared:
   environments, and known gotchas.
 - **`gene_variance/`** — Simpler OLS-based approach: between-individual
   (`|residuals| ~ age + sex` on pseudobulk means) and within-individual
-  (per-animal cell-level variance `~ age + sex`) regressions.
+  (per-animal cell-level variance `~ age + sex`) regressions. See
+  [`gene_variance/AGENTS.md`](gene_variance/AGENTS.md) for pipeline order,
+  filtering steps, and known gaps.
 
 ## `plotting_scripts/`
 
