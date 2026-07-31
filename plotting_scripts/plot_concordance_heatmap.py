@@ -19,9 +19,9 @@ import matplotlib.pyplot as plt
 import os
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--gv_master',   default='/scratch/easmit31/variability/gene_variance/results_log/master_between.tsv')
-parser.add_argument('--dglm_master', default='/scratch/easmit31/variability/dglm/checkpoints/master_dglm_globalfdr.tsv')
-parser.add_argument('--outdir',      default='/scratch/easmit31/variability/plotting_scripts/figures')
+parser.add_argument('--gv_master',   default='/scratch/easmit31/dispersion/gene_variance/results_log/master_between.tsv')
+parser.add_argument('--dglm_master', default='/scratch/easmit31/dispersion/dglm/checkpoints/master_dglm_globalfdr.tsv')
+parser.add_argument('--outdir',      default='/scratch/easmit31/dispersion/plotting_scripts/figures')
 parser.add_argument('--q_gv',        type=float, default=0.05)
 parser.add_argument('--q_dglm',      type=float, default=0.05)
 parser.add_argument('--outfmt',      default='png')

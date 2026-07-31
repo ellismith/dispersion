@@ -1,0 +1,2 @@
+/var/spool/slurmd/job55822098/slurm_script: line 4: 3012815 Killed                  /home/easmit31/.conda/envs/mixed_models/bin/python /scratch/easmit31/variability/gene_variance/run_gene_variance.py --h5ad /scratch/nsnyderm/u01/intermediate_files/cell-class_h5ad_update/Res1_glutamatergic-neurons_update.h5ad --cell_type glutamatergic_neurons --region IPP --outdir /scratch/easmit31/variability/gene_variance --min_age 1.0 --min_animals 10
+[2026-06-16T17:15:01.534] error: Detected 1 oom_kill event in StepId=55822098.batch. Some of the step tasks have been OOM Killed.

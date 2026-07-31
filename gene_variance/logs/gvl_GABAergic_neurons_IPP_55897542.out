@@ -1,0 +1,16 @@
+args saved: /scratch/easmit31/variability/gene_variance/results_log/GABAergic_neurons_IPP_args.json
+loading ortholog map
+loading /scratch/nsnyderm/u01/intermediate_files/cell-class_h5ad_update/Res1_GABAergic-neurons_subset.h5ad
+  loaded: (544142, 29060)
+  after region filter (IPP): (250731, 29060)
+  after age filter (>=1.0): (240626, 29060)
+  sex categories: ['M']
+  .raw not found, using .X for visualization columns
+  n animals: 53
+computing pseudobulk mean and variance per animal
+  genes after min_animals filter: 21384 / 29060
+running between-individual regression
+  saved: /scratch/easmit31/variability/gene_variance/results_log/GABAergic_neurons_IPP_between.tsv
+running within-individual regression
+  saved: /scratch/easmit31/variability/gene_variance/results_log/GABAergic_neurons_IPP_within.tsv
+done.

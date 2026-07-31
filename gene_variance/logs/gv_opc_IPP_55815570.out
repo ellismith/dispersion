@@ -1,0 +1,6 @@
+loading ortholog map
+loading /scratch/nsnyderm/u01/intermediate_files/cell-class_h5ad_update/Res1_opc-olig_subset.h5ad
+  loaded: (1247585, 29060)
+  after region filter (IPP): (307191, 29060)
+  after age filter (>=1.0): (302657, 29060)
+  after opc louvain filter (12,13): (36350, 29060)

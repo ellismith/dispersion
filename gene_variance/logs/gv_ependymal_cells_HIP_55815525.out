@@ -1,0 +1,13 @@
+loading ortholog map
+loading /scratch/nsnyderm/u01/intermediate_files/cell-class_h5ad_update/Res1_ependymal-cells_new.h5ad
+  loaded: (26203, 29060)
+  after region filter (HIP): (10202, 29060)
+  after age filter (>=1.0): (9945, 29060)
+  n animals: 51
+computing pseudobulk mean and variance per animal
+  genes after min_animals filter: 15442
+running between-individual regression (pseudobulk mean)
+  saved: /scratch/easmit31/variability/gene_variance/ependymal_cells_HIP_between.tsv
+running within-individual regression (per-animal variance)
+  saved: /scratch/easmit31/variability/gene_variance/ependymal_cells_HIP_within.tsv
+done.

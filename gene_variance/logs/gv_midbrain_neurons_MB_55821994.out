@@ -1,0 +1,14 @@
+loading ortholog map
+loading /scratch/nsnyderm/u01/intermediate_files/cell-class_h5ad_update/Res1_midbrain-neurons_update.h5ad
+  loaded: (90755, 29060)
+  after region filter (MB): (90755, 29060)
+  after age filter (>=1.0): (89555, 29060)
+  .raw not found, using .X for visualization columns
+  n animals: 47
+computing pseudobulk mean and variance per animal
+  genes after min_animals filter: 24097
+running between-individual regression (pseudobulk mean)
+  saved: /scratch/easmit31/variability/gene_variance/midbrain_neurons_MB_between.tsv
+running within-individual regression (per-animal variance)
+  saved: /scratch/easmit31/variability/gene_variance/midbrain_neurons_MB_within.tsv
+done.

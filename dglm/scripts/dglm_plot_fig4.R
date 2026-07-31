@@ -9,15 +9,15 @@
 #   Rscript dglm_plot_fig4.R
 #   Rscript dglm_plot_fig4.R --example_symbol SERPINA3 --example_ct astrocytes
 
-source('/scratch/easmit31/variability/dglm/scripts/_include_options.R')
+source('/scratch/easmit31/dispersion/dglm/scripts/_include_options.R')
 
 library(optparse)
 library(ggplot2)
 
 option_list = list(
-    make_option('--checkpoints',    type='character', default='/scratch/easmit31/variability/dglm/checkpoints'),
-    make_option('--master_tsv',     type='character', default='/scratch/easmit31/variability/dglm/checkpoints/master_dglm_globalfdr.tsv'),
-    make_option('--figdir',         type='character', default='/scratch/easmit31/variability/dglm/figures'),
+    make_option('--checkpoints',    type='character', default='/scratch/easmit31/dispersion/dglm/checkpoints'),
+    make_option('--master_tsv',     type='character', default='/scratch/easmit31/dispersion/dglm/checkpoints/master_dglm_globalfdr.tsv'),
+    make_option('--figdir',         type='character', default='/scratch/easmit31/dispersion/dglm/figures'),
     make_option('--outfmt',         type='character', default='png'),
     make_option('--by_celltype',    action='store_true', default=FALSE),
     make_option('--min_age',        type='double',    default=1.0),

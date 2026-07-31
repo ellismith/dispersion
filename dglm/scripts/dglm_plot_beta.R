@@ -6,7 +6,7 @@
 # Usage:
 #   Rscript dglm_plot_beta.R --cell_type microglia
 
-source('/scratch/easmit31/variability/dglm/scripts/_include_options.R')
+source('/scratch/easmit31/dispersion/dglm/scripts/_include_options.R')
 
 library(optparse)
 library(ggplot2)
@@ -15,8 +15,8 @@ library(mashr)
 
 option_list = list(
     make_option('--cell_type',   type='character', help='cell type to analyze'),
-    make_option('--checkpoints', type='character', default='/scratch/easmit31/variability/dglm/checkpoints'),
-    make_option('--figdir',      type='character', default='/scratch/easmit31/variability/dglm/figures'),
+    make_option('--checkpoints', type='character', default='/scratch/easmit31/dispersion/dglm/checkpoints'),
+    make_option('--figdir',      type='character', default='/scratch/easmit31/dispersion/dglm/figures'),
     make_option('--outfmt',      type='character', default='png')
 )
 opt = parse_args(OptionParser(option_list=option_list))

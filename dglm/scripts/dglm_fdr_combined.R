@@ -2,12 +2,12 @@
 # dglm_fdr_combined.R
 # Extracts mashr results from combined run, applies global BH-FDR, saves master TSV.
 
-source('/scratch/easmit31/variability/dglm/scripts/_include_options.R')
+source('/scratch/easmit31/dispersion/dglm/scripts/_include_options.R')
 library(optparse)
 library(mashr)
 
 option_list = list(
-    make_option('--checkpoints', type='character', default='/scratch/easmit31/variability/dglm/checkpoints')
+    make_option('--checkpoints', type='character', default='/scratch/easmit31/dispersion/dglm/checkpoints')
 )
 opt = parse_args(OptionParser(option_list=option_list))
 

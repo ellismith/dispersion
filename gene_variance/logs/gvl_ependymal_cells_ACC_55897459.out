@@ -1,0 +1,10 @@
+args saved: /scratch/easmit31/variability/gene_variance/results_log/ependymal_cells_ACC_args.json
+loading ortholog map
+loading /scratch/nsnyderm/u01/intermediate_files/cell-class_h5ad_update/Res1_ependymal-cells_new.h5ad
+  loaded: (26203, 29060)
+  after region filter (ACC): (4, 29060)
+  after age filter (>=1.0): (4, 29060)
+  sex categories: []
+  using .raw for visualization columns
+  n animals: 1
+  ERROR: only 1 animals after filtering, skipping

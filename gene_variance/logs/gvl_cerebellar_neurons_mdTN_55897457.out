@@ -1,0 +1,10 @@
+args saved: /scratch/easmit31/variability/gene_variance/results_log/cerebellar_neurons_mdTN_args.json
+loading ortholog map
+loading /scratch/nsnyderm/u01/intermediate_files/cell-class_h5ad_update/Res1_cerebellar-neurons_subset.h5ad
+  loaded: (736684, 29060)
+  after region filter (mdTN): (0, 29060)
+  after age filter (>=1.0): (0, 29060)
+  sex categories: []
+  .raw not found, using .X for visualization columns
+  n animals: 0
+  ERROR: only 0 animals after filtering, skipping

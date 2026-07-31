@@ -1,0 +1,14 @@
+loading ortholog map
+loading /scratch/nsnyderm/u01/intermediate_files/cell-class_h5ad_update/Res1_astrocytes_update.h5ad
+  loaded: (472984, 29060)
+  after region filter (CN): (33104, 29060)
+  after age filter (>=1.0): (31583, 29060)
+  .raw not found, using .X for visualization columns
+  n animals: 51
+computing pseudobulk mean and variance per animal
+  genes after min_animals filter: 17158
+running between-individual regression (pseudobulk mean)
+  saved: /scratch/easmit31/variability/gene_variance/astrocytes_CN_between.tsv
+running within-individual regression (per-animal variance)
+  saved: /scratch/easmit31/variability/gene_variance/astrocytes_CN_within.tsv
+done.

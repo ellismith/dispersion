@@ -1,0 +1,11 @@
+
+CondaError: Run 'conda init' before 'conda activate'
+
+/home/easmit31/.conda/envs/mixed_models/lib/python3.10/site-packages/anndata/_core/aligned_df.py:68: ImplicitModificationWarning: Transforming to str index.
+  warnings.warn("Transforming to str index.", ImplicitModificationWarning)
+/home/easmit31/.conda/envs/mixed_models/lib/python3.10/site-packages/anndata/_core/aligned_df.py:68: ImplicitModificationWarning: Transforming to str index.
+  warnings.warn("Transforming to str index.", ImplicitModificationWarning)
+Traceback (most recent call last):
+  File "/scratch/easmit31/variability/gene_variance/run_gene_variance.py", line 73, in <module>
+    X_raw = adata.raw.X
+AttributeError: 'NoneType' object has no attribute 'X'

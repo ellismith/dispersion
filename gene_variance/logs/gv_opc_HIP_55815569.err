@@ -1,0 +1,6 @@
+/home/easmit31/.conda/envs/mixed_models/lib/python3.10/site-packages/pandas/core/arrays/categorical.py:537: RuntimeWarning: invalid value encountered in cast
+  np.array(self.categories._na_value).astype(dtype)
+Traceback (most recent call last):
+  File "/scratch/easmit31/variability/gene_variance/run_gene_variance.py", line 80, in <module>
+    X_raw = adata.raw.X
+AttributeError: 'NoneType' object has no attribute 'X'

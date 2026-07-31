@@ -1,0 +1,14 @@
+loading ortholog map
+loading /scratch/nsnyderm/u01/intermediate_files/cell-class_h5ad_update/Res1_glutamatergic-neurons_update.h5ad
+  loaded: (1486012, 29060)
+  after region filter (mdTN): (107364, 29060)
+  after age filter (>=1.0): (103635, 29060)
+  .raw not found, using .X for visualization columns
+  n animals: 52
+computing pseudobulk mean and variance per animal
+  genes after min_animals filter: 23269
+running between-individual regression (pseudobulk mean)
+  saved: /scratch/easmit31/variability/gene_variance/glutamatergic_neurons_mdTN_between.tsv
+running within-individual regression (per-animal variance)
+  saved: /scratch/easmit31/variability/gene_variance/glutamatergic_neurons_mdTN_within.tsv
+done.

@@ -19,7 +19,7 @@
 #   Rscript dglm_mashr.R --cell_type microglia
 #   Rscript dglm_mashr.R --mode combined
 
-source('/scratch/easmit31/variability/dglm/scripts/_include_options.R')
+source('/scratch/easmit31/dispersion/dglm/scripts/_include_options.R')
 
 library(optparse)
 library(mashr)
@@ -31,7 +31,7 @@ option_list = list(
     make_option('--cell_type',   type='character', default=NULL,
                 help='cell type (required for per_ct mode)'),
     make_option('--checkpoints', type='character',
-                default='/scratch/easmit31/variability/dglm/checkpoints')
+                default='/scratch/easmit31/dispersion/dglm/checkpoints')
 )
 opt = parse_args(OptionParser(option_list=option_list))
 

@@ -1,0 +1,5 @@
+loading ortholog map
+loading /scratch/nsnyderm/u01/intermediate_files/cell-class_h5ad_update/Res1_glutamatergic-neurons_update.h5ad
+  loaded: (1486012, 29060)
+  after region filter (dlPFC): (125407, 29060)
+  after age filter (>=1.0): (119343, 29060)

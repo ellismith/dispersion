@@ -1,126 +1,116 @@
 #!/usr/bin/env Rscript
 # dglm_plot_heatmap.R
 # Summary heatmaps of sig genes across cell types x regions.
-# Can read from master TSV (global FDR) or per-cell-type RDS (per-region FDR).
-#
-# Usage:
-#   # global FDR (recommended)
-#   Rscript dglm_plot_heatmap.R --master_tsv checkpoints/master_dglm_globalfdr.tsv
-#   # per-region FDR
-#   Rscript dglm_plot_heatmap.R
+# Default: increase/decrease/net heatmaps for age effects.
+# --sex_mode: male/female separate heatmaps (no negatives).
 
-source('/scratch/easmit31/variability/dglm/scripts/_include_options.R')
+source('/scratch/easmit31/dispersion/dglm/scripts/_include_options.R')
 
 library(optparse)
 library(ggplot2)
 library(reshape2)
 
 option_list = list(
-    make_option('--checkpoints', type='character', default='/scratch/easmit31/variability/dglm/checkpoints'),
-    make_option('--master_tsv',  type='character', default=NULL,
-                help='optional: master TSV with global FDR qvalues'),
-    make_option('--figdir',      type='character', default='/scratch/easmit31/variability/dglm/figures'),
-    make_option('--outfmt',      type='character', default='png'),
-    make_option('--sig_col', type='character', default='qvalue', help='column to use for significance: qvalue or mash_lfsr'),
-    make_option('--qthresh',     type='double',    default=0.05)
+    make_option('--master_tsv', type='character', required=TRUE),
+    make_option('--figdir',     type='character', default='/scratch/easmit31/dispersion/dglm/figures'),
+    make_option('--outfmt',     type='character', default='png'),
+    make_option('--sig_col',    type='character', default='qvalue'),
+    make_option('--qthresh',    type='double',    default=0.05),
+    make_option('--sex_mode',   action='store_true', default=FALSE)
 )
 opt = parse_args(OptionParser(option_list=option_list))
-
 dir.create(opt$figdir, showWarnings=FALSE, recursive=TRUE)
 
-save_fig = function(p, name, height, width) {
-    out = file.path(opt$figdir, paste0(name, '.', opt$outfmt))
-    if (opt$outfmt == 'png') {
-        ggsave(p, file=out, height=height, width=width, dpi=150)
-    } else {
-        ggsave(p, file=out, height=height, width=width, useDingbats=FALSE)
-    }
-    message('Saved: ', out)
-}
+message('Loading: ', opt$master_tsv)
+master = read.table(opt$master_tsv, sep='\t', header=TRUE, stringsAsFactors=FALSE)
+if (!opt$sig_col %in% colnames(master))
+    stop('Column not found: ', opt$sig_col)
+master = master[!is.na(master[[opt$sig_col]]) & !is.na(master$beta),]
+master$sig = master[[opt$sig_col]] < opt$qthresh
+fdr_label  = ifelse(opt$sig_col == 'mash_lfsr', 'mashr lfsr', 'global FDR')
 
-# ── load results ──────────────────────────────────────────────────────────
-if (!is.null(opt$master_tsv)) {
-    message('Loading from master TSV (global FDR): ', opt$master_tsv)
-    master = read.table(opt$master_tsv, sep='\t', header=TRUE, stringsAsFactors=FALSE)
-    fdr_label = 'global FDR'
-} else {
-    message('Loading from per-cell-type RDS (per-region FDR)')
-    all.results = list()
-    for (ct in cell.type.levels) {
-        rds.file = file.path(opt$checkpoints, paste0(ct, '_dglm_mashr_results.rds'))
-        if (!file.exists(rds.file)) next
-        obj          = readRDS(rds.file)
-        dglm.results = obj$dglm_results
-        regions      = obj$regions
-        beta.mat     = dglm.results[,'beta', regions, drop=FALSE][,1,, drop=FALSE]
-        extreme      = apply(beta.mat, 1, function(x) any(abs(x) > 100, na.rm=TRUE))
-        if (sum(extreme) > 0) dglm.results = dglm.results[!extreme,,, drop=FALSE]
-        for (r in regions) {
-            pval = dglm.results[,'pval', r]
-            beta = dglm.results[,'beta', r]
-            qval = p.adjust(pval, method='fdr')
-            all.results[[length(all.results)+1]] = data.frame(
-                symbol=dimnames(dglm.results)[[1]], cell_type=ct, region=r,
-                beta=beta, qvalue=qval, stringsAsFactors=FALSE)
-        }
-    }
-    master    = do.call(rbind, all.results)
-    fdr_label = 'per-region FDR'
-}
-
-master = master[!is.na(master$qvalue),]
 message('Total tests: ', nrow(master))
-message('Sig at q<', opt$qthresh, ': ', sum(master$qvalue < opt$qthresh))
+message('Sig at ', opt$sig_col, '<', opt$qthresh, ': ', sum(master$sig))
 
-# ── build count matrices ──────────────────────────────────────────────────
-inc.mat = matrix(NA, nrow=length(cell.type.levels), ncol=length(region.levels),
-                 dimnames=list(cell.type.levels, region.levels))
-dec.mat = inc.mat
+# ── count matrices ────────────────────────────────────────────────────────────
+mat_a = matrix(NA, nrow=length(cell.type.levels), ncol=length(region.levels),
+               dimnames=list(cell.type.levels, region.levels))
+mat_b = mat_a
 
 for (ct in cell.type.levels) {
     for (r in region.levels) {
         sub = master[master$cell_type == ct & master$region == r,]
         if (nrow(sub) == 0) next
-        inc.mat[ct, r] = sum(sub[[opt$sig_col]] < opt$qthresh & sub$beta > 0, na.rm=TRUE)
-        dec.mat[ct, r] = sum(sub[[opt$sig_col]] < opt$qthresh & sub$beta < 0, na.rm=TRUE)
+        mat_a[ct, r] = sum(sub$sig & sub$beta > 0, na.rm=TRUE)
+        mat_b[ct, r] = sum(sub$sig & sub$beta < 0, na.rm=TRUE)
     }
 }
 
-# ── plot helper ───────────────────────────────────────────────────────────
-make_heatmap = function(mat, title, outpath, high_col) {
-    cols  = region.levels[region.levels %in% colnames(mat)]
-    mat   = mat[, cols, drop=FALSE]
-    df    = melt(mat, varnames=c('cell_type','region'), value.name='n')
-    df$cell_type = factor(df$cell_type, levels=rev(cell.type.levels))
-    df$region    = factor(df$region,    levels=region.levels)
-    vmax  = max(df$n, na.rm=TRUE)
+# ── plot helper ───────────────────────────────────────────────────────────────
+save_heatmap = function(mat, title, fname, high_col, diverging=FALSE) {
+    df           = melt(mat, varnames=c('cell_type','region'), value.name='n')
+    # apply acronym labels and canonical order
+    df$cell_type = factor(cell.type.labels[as.character(df$cell_type)],
+                          levels=rev(cell.type.labels[cell.type.levels]))
+    df$region    = factor(df$region, levels=region.levels)
+    vmax = max(abs(mat), na.rm=TRUE)
+    if (vmax == 0) vmax = 1
 
-    p = ggplot(df, aes(region, cell_type, fill=n)) +
-        geom_tile(color='white', linewidth=0.5) +
-        geom_text(aes(label=ifelse(is.na(n), '', as.integer(n))),
-                  size=3, color='black') +
-        scale_fill_gradient(low='white', high=high_col, na.value='gray90',
-                            limits=c(0, vmax), name='n genes') +
-        theme_classic(base_size=12) +
-        theme(axis.text.x  = element_text(angle=45, hjust=1),
-              axis.title    = element_blank(),
-              panel.border  = element_rect(fill=NA, color='gray80')) +
-        ggtitle(title)
-    ggsave(p, file=outpath, height=0.4*length(cell.type.levels)+2,
-           width=0.5*length(region.levels)+3, dpi=150)
-    message('Saved: ', outpath)
+    base_theme = theme_classic(base_size=14) +
+        theme(
+            axis.text.x  = element_text(angle=45, hjust=1, size=13),
+            axis.text.y  = element_text(size=13),
+            axis.title   = element_blank(),
+            plot.title   = element_text(size=14, hjust=0.5)
+        )
+
+    if (diverging) {
+        p = ggplot(df, aes(region, cell_type, fill=n)) +
+            geom_tile(color='white', linewidth=0.5) +
+            geom_text(aes(label=ifelse(is.na(n), '', as.integer(n))), size=3, color='black') +
+            scale_fill_gradient2(low='#4575b4', mid='white', high='#d73027',
+                                 midpoint=0, limits=c(-vmax, vmax),
+                                 na.value='gray90', name='n genes') +
+            base_theme + ggtitle(title)
+    } else {
+        p = ggplot(df, aes(region, cell_type, fill=n)) +
+            geom_tile(color='white', linewidth=0.5) +
+            geom_text(aes(label=ifelse(is.na(n), '', as.integer(n))), size=3, color='black') +
+            scale_fill_gradient(low='white', high=high_col, na.value='gray90',
+                                limits=c(0, vmax), name='n genes') +
+            base_theme + ggtitle(title)
+    }
+
+    out = file.path(opt$figdir, paste0(fname, '_final.', opt$outfmt))
+    ggsave(p, file=out,
+           height=0.45*length(cell.type.levels)+2,
+           width=0.55*length(region.levels)+3, dpi=150)
+    message('Saved: ', out)
 }
 
-suffix = ifelse(!is.null(opt$master_tsv), '_globalfdr', '_perregionfdr')
-
-make_heatmap(inc.mat,
-    title   = paste0('DGLM: variance increases with age (q<', opt$qthresh, ', ', fdr_label, ')'),
-    outpath = file.path(opt$figdir, paste0('heatmap_dglm_increase', suffix, '.', opt$outfmt)),
-    high_col = '#d73027')
-
-make_heatmap(dec.mat,
-    title   = paste0('DGLM: variance decreases with age (q<', opt$qthresh, ', ', fdr_label, ')'),
-    outpath = file.path(opt$figdir, paste0('heatmap_dglm_decrease', suffix, '.', opt$outfmt)),
-    high_col = '#4575b4')
+if (opt$sex_mode) {
+    save_heatmap(mat_a,
+        title    = paste0('Increased dispersion in males (', fdr_label, '<', opt$qthresh, ')'),
+        fname    = paste0('heatmap_sex_dispersion_male_', opt$sig_col, '_q', opt$qthresh),
+        high_col = '#d73027')
+    save_heatmap(mat_b,
+        title    = paste0('Increased dispersion in females (', fdr_label, '<', opt$qthresh, ')'),
+        fname    = paste0('heatmap_sex_dispersion_female_', opt$sig_col, '_q', opt$qthresh),
+        high_col = '#4575b4')
+} else {
+    save_heatmap(mat_a,
+        title    = paste0('DGLM: variance increases with age (', fdr_label, '<', opt$qthresh, ')'),
+        fname    = paste0('heatmap_age_dispersion_increase_', opt$sig_col, '_q', opt$qthresh),
+        high_col = '#d73027')
+    save_heatmap(mat_b,
+        title    = paste0('DGLM: variance decreases with age (', fdr_label, '<', opt$qthresh, ')'),
+        fname    = paste0('heatmap_age_dispersion_decrease_', opt$sig_col, '_q', opt$qthresh),
+        high_col = '#4575b4')
+    net.mat = mat_a - mat_b
+    save_heatmap(net.mat,
+        title     = paste0('DGLM: net direction (', fdr_label, '<', opt$qthresh, ')'),
+        fname     = paste0('heatmap_age_dispersion_net_', opt$sig_col, '_q', opt$qthresh),
+        high_col  = '#d73027', diverging=TRUE)
+}
 
 message('done.')

@@ -1,0 +1,7 @@
+loading /scratch/nsnyderm/u01/intermediate_files/cell-class_h5ad_update/Res1_GABAergic-neurons_subset.h5ad
+  skipping lCb: could not read TSVs
+  skipping MB: could not read TSVs
+  saved: /scratch/easmit31/variability/gene_variance/plots/GABAergic_neurons_allregions_between.png
+  saved: /scratch/easmit31/variability/gene_variance/plots/GABAergic_neurons_allregions_within.png
+
+done.

@@ -1,0 +1,15 @@
+loading ortholog map
+loading /scratch/nsnyderm/u01/intermediate_files/cell-class_h5ad_update/Res1_opc-olig_subset.h5ad
+  loaded: (1247585, 29060)
+  after region filter (lCb): (36431, 29060)
+  after age filter (>=1.0): (35709, 29060)
+  after opc louvain filter (12,13): (8791, 29060)
+  .raw not found, using .X for visualization columns
+  n animals: 47
+computing pseudobulk mean and variance per animal
+  genes after min_animals filter: 13953
+running between-individual regression (pseudobulk mean)
+  saved: /scratch/easmit31/variability/gene_variance/opc_lCb_between.tsv
+running within-individual regression (per-animal variance)
+  saved: /scratch/easmit31/variability/gene_variance/opc_lCb_within.tsv
+done.

@@ -25,8 +25,8 @@ from scipy import sparse, stats
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--h5ad_dir',      default='/scratch/nsnyderm/u01/intermediate_files/cell-class_h5ad_update')
-parser.add_argument('--checkpoints',   default='/scratch/easmit31/variability/dglm/checkpoints')
-parser.add_argument('--outdir',        default='/scratch/easmit31/variability/dglm/checkpoints')
+parser.add_argument('--checkpoints',   default='/scratch/easmit31/dispersion/dglm/checkpoints')
+parser.add_argument('--outdir',        default='/scratch/easmit31/dispersion/dglm/checkpoints')
 parser.add_argument('--min_cells',     type=int,   default=10, help='min cells per animal x ct x region')
 parser.add_argument('--zscore_thresh', type=float, default=3.0, help='SD threshold for expression outlier')
 parser.add_argument('--known_outliers',type=str,   default='8H2:ACC',
@@ -162,7 +162,7 @@ if len(report) > 0:
     print(f'Saved: {out_fig}')
 
 print('done.')
-EOFcat > /scratch/easmit31/variability/dglm/scripts/identify_outliers.py << 'EOF'
+EOFcat > /scratch/easmit31/dispersion/dglm/scripts/identify_outliers.py << 'EOF'
 """
 identify_outliers.py
 
@@ -190,8 +190,8 @@ from scipy import sparse, stats
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--h5ad_dir',      default='/scratch/nsnyderm/u01/intermediate_files/cell-class_h5ad_update')
-parser.add_argument('--checkpoints',   default='/scratch/easmit31/variability/dglm/checkpoints')
-parser.add_argument('--outdir',        default='/scratch/easmit31/variability/dglm/checkpoints')
+parser.add_argument('--checkpoints',   default='/scratch/easmit31/dispersion/dglm/checkpoints')
+parser.add_argument('--outdir',        default='/scratch/easmit31/dispersion/dglm/checkpoints')
 parser.add_argument('--min_cells',     type=int,   default=10, help='min cells per animal x ct x region')
 parser.add_argument('--zscore_thresh', type=float, default=3.0, help='SD threshold for expression outlier')
 parser.add_argument('--known_outliers',type=str,   default='8H2:ACC',

@@ -1,0 +1,5 @@
+loading ortholog map
+loading /scratch/nsnyderm/u01/intermediate_files/cell-class_h5ad_update/Res1_GABAergic-neurons_subset.h5ad
+  loaded: (544142, 29060)
+  after region filter (CN): (11204, 29060)
+  after age filter (>=1.0): (10702, 29060)

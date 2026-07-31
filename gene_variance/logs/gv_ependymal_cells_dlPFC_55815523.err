@@ -1,0 +1,8 @@
+/home/easmit31/.conda/envs/mixed_models/lib/python3.10/site-packages/anndata/_core/aligned_df.py:68: ImplicitModificationWarning: Transforming to str index.
+  warnings.warn("Transforming to str index.", ImplicitModificationWarning)
+/scratch/easmit31/variability/gene_variance/run_gene_variance.py:125: RuntimeWarning: Mean of empty slice.
+  gene_mean_expr   = mean_mat_raw.mean(axis=0)
+/scratch/easmit31/variability/gene_variance/run_gene_variance.py:126: RuntimeWarning: Degrees of freedom <= 0 for slice
+  gene_var_between = mean_mat_raw.var(axis=0)
+/scratch/easmit31/variability/gene_variance/run_gene_variance.py:127: RuntimeWarning: Mean of empty slice.
+  gene_var_within  = var_mat_raw.mean(axis=0)

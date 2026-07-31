@@ -1,0 +1,10 @@
+
+CondaError: Run 'conda init' before 'conda activate'
+
+Traceback (most recent call last):
+  File "/scratch/easmit31/variability/gene_variance/run_gene_variance.py", line 20, in <module>
+    import statsmodels.api as sm
+  File "/etc/python/sitecustomize.py", line 117, in _import
+    mod = _original_import(name, globals, locals, fromlist, level)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+ModuleNotFoundError: No module named 'statsmodels'

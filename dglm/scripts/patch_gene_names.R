@@ -3,12 +3,12 @@
 # Patches existing mashr RDS files to add external_gene_name from var table.
 # Priority: human ortholog (one2one) > external_gene_name > ensembl_id
 
-source('/scratch/easmit31/variability/dglm/scripts/_include_options.R')
+source('/scratch/easmit31/dispersion/dglm/scripts/_include_options.R')
 
 library(optparse)
 
 option_list = list(
-    make_option('--checkpoints', type='character', default='/scratch/easmit31/variability/dglm/checkpoints')
+    make_option('--checkpoints', type='character', default='/scratch/easmit31/dispersion/dglm/checkpoints')
 )
 opt = parse_args(OptionParser(option_list=option_list))
 

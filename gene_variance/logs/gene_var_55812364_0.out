@@ -1,0 +1,6 @@
+cell type: astrocytes  region: ACC  h5ad: /scratch/nsnyderm/u01/intermediate_files/cell-class_h5ad_update/Res1_astrocytes_update.h5ad
+loading ortholog map
+loading /scratch/nsnyderm/u01/intermediate_files/cell-class_h5ad_update/Res1_astrocytes_update.h5ad
+  loaded: (472984, 29060)
+  after region filter (ACC): (62914, 29060)
+  after age filter (>=1.0): (60573, 29060)

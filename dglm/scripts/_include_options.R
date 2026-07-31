@@ -95,3 +95,19 @@ region.colors = c(
 # Auto-detect cores, cap at n.cores
 n.cores = min(n.cores, parallel::detectCores(logical=FALSE))
 message('Using ', n.cores, ' cores')
+
+# Cell type acronym labels (for plotting)
+cell.type.labels = c(
+    astrocytes            = 'AST',
+    basket_cells          = 'BC',
+    cerebellar_neurons    = 'CER',
+    ependymal_cells       = 'EPEN',
+    GABAergic_neurons     = 'INH',
+    glutamatergic_neurons = 'EXC',
+    medium_spiny_neurons  = 'MSN',
+    microglia             = 'MGL',
+    midbrain_neurons      = 'MBN',
+    opc                   = 'OPC',
+    oligodendrocytes      = 'OLIG',
+    vascular_cells        = 'VASC'
+)
