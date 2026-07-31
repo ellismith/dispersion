@@ -68,6 +68,12 @@ min.animals = 10
 # False sign rate cutoff (mashr)
 fsr.cutoff = 0.2
 
+# Strong-subset q-value cutoff (mashr) -- used ONLY to select which genes are
+# "strong" enough to drive data-driven covariance estimation (cov_pca/cov_ed).
+# Matches Chiou et al.'s dglm_mashr.R, which hardcodes q<0.05 here (a
+# different, stricter number than their final LFSR significance cutoff above).
+strong.subset.qval.cutoff = 0.05
+
 # Fraction of regions considered shared
 fraction.shared.cutoff = 0.75
 

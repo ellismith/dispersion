@@ -19,7 +19,10 @@ all.results = list()
 
 for (ct in cell.type.levels) {
     # prefer mashr RDS (has dglm_results), fall back to raw DGLM RDS (has array)
-    mashr.file = file.path(opt$checkpoints, paste0(ct, '_dglm_mashr_results.rds'))
+    # mashr filename now carries its params (strong-subset qval cutoff, LFSR
+    # cutoff) -- see dglm_mashr.R
+    mashr.file = file.path(opt$checkpoints,
+        paste0(ct, '_dglm_mashr_results_strong', strong.subset.qval.cutoff, '_lfsr', fsr.cutoff, '.rds'))
     raw.file   = file.path(opt$checkpoints, paste0(ct, '_dglm_results.rds'))
 
     if (file.exists(mashr.file)) {

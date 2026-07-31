@@ -12,7 +12,10 @@ option_list = list(
 opt = parse_args(OptionParser(option_list=option_list))
 
 message('Loading combined mashr results')
-obj           = readRDS(file.path(opt$checkpoints, 'combined_dglm_mashr_results.rds'))
+mashr.file    = file.path(opt$checkpoints,
+    paste0('combined_dglm_mashr_results_strong', strong.subset.qval.cutoff, '_lfsr', fsr.cutoff, '.rds'))
+message('  file: ', mashr.file)
+obj           = readRDS(mashr.file)
 m             = obj$mash
 Bhat          = obj$Bhat
 human.symbols = obj$human_symbols

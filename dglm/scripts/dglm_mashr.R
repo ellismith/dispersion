@@ -55,10 +55,13 @@ run_mashr = function(Bhat, Shat, dglm.qval, label) {
     mash.data = mash_set_data(Bhat.sc, Shat.sc)
 
     # strong subset: sig in >= 1/3 of conditions
+    # NOTE: uses strong.subset.qval.cutoff (0.05, matches Chiou et al.'s
+    # actual script), NOT fsr.cutoff (0.2, the final LFSR significance
+    # threshold) -- these are two different thresholds for two different jobs.
     strong.subset = which(apply(dglm.qval, 1, function(x) {
-        sum(x < fsr.cutoff, na.rm=TRUE)
+        sum(x < strong.subset.qval.cutoff, na.rm=TRUE)
     }) >= max(1, ncol(Bhat) / 3))
-    message('  strong subset: ', length(strong.subset))
+    message('  strong subset (q<', strong.subset.qval.cutoff, '): ', length(strong.subset))
 
     set.seed(seed)
     random.subset = sample(1:nrow(Bhat.sc), ceiling(nrow(Bhat.sc)/2))
@@ -160,7 +163,7 @@ if (opt$mode == 'per_ct') {
         human.symbols = human.symbols[!extreme]
     }
 
-    out.file = file.path(opt$checkpoints, paste0(cell.type, '_dglm_mashr_results.rds'))
+    out.file = file.path(opt$checkpoints, paste0(cell.type, '_dglm_mashr_results_strong', strong.subset.qval.cutoff, '_lfsr', fsr.cutoff, '.rds'))
 
     if (length(regions.with.data) < 2) {
         message('Only one region — skipping mashr')
@@ -277,7 +280,7 @@ if (opt$mode == 'combined') {
     # run mashr
     result = run_mashr(Bhat, Shat, dglm.qval, 'combined')
 
-    out.file = file.path(opt$checkpoints, 'combined_dglm_mashr_results.rds')
+    out.file = file.path(opt$checkpoints, paste0('combined_dglm_mashr_results_strong', strong.subset.qval.cutoff, '_lfsr', fsr.cutoff, '.rds'))
     saveRDS(list(
         mash          = result$mash,
         Bhat          = Bhat,
