@@ -1,5 +1,0 @@
-loading ortholog map
-loading /scratch/nsnyderm/u01/intermediate_files/cell-class_h5ad_update/Res1_basket-cells_update.h5ad
-  loaded: (74152, 29060)
-  after region filter (dlPFC): (0, 29060)
-  after age filter (>=1.0): (0, 29060)

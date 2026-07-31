@@ -1,4 +1,0 @@
-/home/easmit31/.conda/envs/mixed_models/lib/python3.10/site-packages/anndata/_core/aligned_df.py:68: ImplicitModificationWarning: Transforming to str index.
-  warnings.warn("Transforming to str index.", ImplicitModificationWarning)
-/home/easmit31/.conda/envs/mixed_models/lib/python3.10/site-packages/anndata/_core/aligned_df.py:68: ImplicitModificationWarning: Transforming to str index.
-  warnings.warn("Transforming to str index.", ImplicitModificationWarning)

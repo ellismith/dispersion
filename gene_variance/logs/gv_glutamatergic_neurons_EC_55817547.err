@@ -1,4 +1,0 @@
-Traceback (most recent call last):
-  File "/scratch/easmit31/variability/gene_variance/run_gene_variance.py", line 80, in <module>
-    X_raw = adata.raw.X
-AttributeError: 'NoneType' object has no attribute 'X'
