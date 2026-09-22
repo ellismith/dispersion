@@ -1,8 +1,8 @@
 #!/bin/bash
 
-SCRIPT=/scratch/easmit31/variability/dglm/scripts/dglm_mashr.R
-CHECKPOINTS=/scratch/easmit31/variability/dglm/checkpoints
-LOGDIR=/scratch/easmit31/variability/dglm/logs
+SCRIPT=/scratch/easmit31/dispersion/dglm/scripts/dglm_mashr.R
+CHECKPOINTS=/scratch/easmit31/dispersion/dglm/checkpoints
+LOGDIR=/scratch/easmit31/dispersion/dglm/logs
 RSCRIPT=/home/easmit31/.conda/envs/mashr_env/bin/Rscript
 mkdir -p $LOGDIR
 
@@ -14,7 +14,7 @@ for CT in "${CELL_TYPES[@]}"; do
         --output=${LOGDIR}/mashr_${CT}_%j.out \
         --error=${LOGDIR}/mashr_${CT}_%j.err \
         --mem=64G --time=03:59:00 -p htc \
-        --wrap="cd /scratch/easmit31/variability/dglm && ${RSCRIPT} ${SCRIPT} --cell_type ${CT} --checkpoints ${CHECKPOINTS}"
+        --wrap="cd /scratch/easmit31/dispersion/dglm && ${RSCRIPT} ${SCRIPT} --cell_type ${CT} --checkpoints ${CHECKPOINTS}"
 done
 
 echo "all jobs submitted"

@@ -1,0 +1,603 @@
+#!/usr/bin/env Rscript
+# dglm_go_enrichment.R
+#
+# GO enrichment (topGO), adapted from Chiou et al.'s dglm_topgo.R, run at
+# SUBCLUSTER resolution to match the current per-cell-type mashr pipeline
+# (the original script assumed one pooled mashr object with cell_type|region
+# conditions; that no longer exists -- there are 12 separate per-cell-type
+# mashr objects with subcluster|region conditions instead). For each cell
+# type's own combined mashr object, loops over that cell type's own
+# subclusters, and for each subcluster runs the same two tests as the
+# original: a union-across-that-subcluster's-own-regions test, and a
+# per-region test -- same test functions (get.ks.pval/get.fisher.pval etc,
+# from _include_options.R), same algorithms, same cutoffs. The GO
+# annotation/name cache is genome-wide and shared across cell types, same
+# as the original.
+#
+# opc/oligodendrocytes: relabels the shared raw "opc-olig_N" subcluster
+# prefix using the (already-correct) parent directory -- cosmetic only.
+#
+# Usage:
+#   # one-time: build the shared GO annotation cache before running any
+#   # per-cell-type jobs in parallel (avoids a race on the shared cache file)
+#   Rscript dglm_go_enrichment.R --dispersion age --cache_only
+#
+#   # per cell type (submit these as separate parallel Slurm jobs)
+#   Rscript dglm_go_enrichment.R --dispersion age --target_celltype astrocytes
+
+source('/scratch/easmit31/dispersion/dglm/scripts/_include_options.R')
+
+library(optparse)
+library(mashr)
+library(reshape2)
+library(parallel)
+
+option_list = list(
+    make_option('--effect', type='character', default='dispersion',
+                help="'dispersion' = existing mashr GO; 'mean' = mean-expression age GO"),
+    make_option('--base_dir', type='character',
+                default='/scratch/easmit31/dispersion/dglm/disp_age__raw_counts'),
+    make_option('--cutoff', type='character', default='0.5'),
+    make_option('--dispersion', type='character', default='age',
+                help="'age' or 'age_sex'"),
+    make_option('--cache_dir', type='character',
+                default='/scratch/easmit31/dispersion/dglm/go_enrichment_results',
+                help='shared cache for GO annotations/names (genome-wide, not per-cell-type)'),
+    make_option('--out_dir', type='character',
+                default='/scratch/easmit31/dispersion/dglm/go_enrichment_results'),
+    make_option('--target_celltype', type='character', default=NULL,
+                help='restrict this run to one cell type (for parallel per-cell-type Slurm jobs); default = all'),
+    make_option('--cache_only', action='store_true', default=FALSE,
+                help='only build/save the shared GO annotation+name cache, then exit -- run this once before any --target_celltype jobs'),
+    make_option('--ignore_checkpoints', action='store_true', default=FALSE),
+    make_option('--n_permutations', type='integer', default=1000)
+)
+opt = parse_args(OptionParser(option_list=option_list))
+dir.create(opt$cache_dir, showWarnings=FALSE, recursive=TRUE)
+dir.create(opt$out_dir, showWarnings=FALSE, recursive=TRUE)
+
+# ═══════════════════════════════════════════════════════════════════════════
+# MEAN-EXPRESSION AGE EFFECT MODE
+#
+# Uses the already-computed DGLM mean-expression results. Analysis unit is
+# subtype x region. Genes with qvalue < cutoff are split by beta direction.
+# Background = all genes tested in that subtype x region.
+#
+# This branch is completely separate from the existing dispersion/mashr
+# analysis below.
+# ═══════════════════════════════════════════════════════════════════════════
+
+if (opt$effect == 'mean') {
+
+    library(topGO)
+
+    mean.file = '/scratch/easmit31/dispersion/dglm/scripts/mean_expression_age_effects.csv'
+    mean.out.dir = file.path(opt$out_dir, 'mean_expression')
+    dir.create(mean.out.dir, showWarnings=FALSE, recursive=TRUE)
+
+    if (!file.exists(mean.file))
+        stop('Mean-expression results not found: ', mean.file)
+
+    message('Reading mean-expression results: ', mean.file)
+    mean.df = read.csv(mean.file, stringsAsFactors=FALSE)
+
+    required = c('ensembl_id', 'cell_type', 'region', 'beta', 'qvalue')
+    missing = setdiff(required, colnames(mean.df))
+    if (length(missing) > 0)
+        stop('Mean-expression CSV missing columns: ', paste(missing, collapse=', '))
+
+    # Remove duplicate gene/subtype/region rows if present.
+    mean.df = mean.df[
+        !duplicated(mean.df[, c('cell_type', 'region', 'ensembl_id')]),
+    ]
+
+    # ── GO annotations: same marmoset annotation strategy as existing code ──
+    go.anno.file = file.path(opt$cache_dir, 'rnaseq_genes_go.rds')
+
+    if (file.exists(go.anno.file) && !opt$ignore_checkpoints) {
+        message('Loading GO annotations from existing cache.')
+        mmul.go = readRDS(go.anno.file)
+    } else {
+        library(biomaRt)
+
+        mmul = useEnsembl(
+            biomart='ENSEMBL_MART_ENSEMBL',
+            dataset='mmulatta_gene_ensembl'
+        )
+
+        mmul.go = getBM(
+            attributes=c('ensembl_gene_id', 'go_id'),
+            filters='ensembl_gene_id',
+            values=unique(mean.df$ensembl_id),
+            mart=mmul
+        )
+
+        saveRDS(mmul.go, file=go.anno.file)
+    }
+
+    mmul.go = mmul.go[
+        !is.na(mmul.go$go_id) &
+        mmul.go$go_id != '',
+    ]
+
+    gene2go.mean = lapply(
+        unique(mmul.go$ensembl_gene_id),
+        function(x) sort(unique(
+            mmul.go$go_id[mmul.go$ensembl_gene_id == x]
+        ))
+    )
+    names(gene2go.mean) = unique(mmul.go$ensembl_gene_id)
+
+    # ── GO metadata ────────────────────────────────────────────────────────
+    go.names.file = file.path(opt$cache_dir, 'rnaseq_go_names.rds')
+
+    if (file.exists(go.names.file) && !opt$ignore_checkpoints) {
+        message('Loading GO names from existing cache.')
+        go.terms = readRDS(go.names.file)
+    } else {
+        library(topGO)
+        library(GO.db)
+
+        go.ids = sort(unique(mmul.go$go_id))
+        go.ids = go.ids[go.ids %in% keys(GO.db)]
+
+        go.terms = data.frame(
+            go_id=go.ids,
+            go_namespace=Ontology(go.ids),
+            go_name=Term(go.ids),
+            stringsAsFactors=FALSE
+        )
+
+        go.terms = go.terms[
+            complete.cases(go.terms) &
+            go.terms$go_namespace == 'BP',
+        ]
+
+        rownames(go.terms) = go.terms$go_id
+        saveRDS(go.terms, file=go.names.file)
+    }
+
+    gene2go.mean = lapply(
+        gene2go.mean,
+        function(x) intersect(x, go.terms$go_id)
+    )
+
+    # ── Run GO separately for each subtype x region x direction ────────────
+    run_mean_go = function(tested, selected, cell_type, region, direction) {
+
+        tested = intersect(tested, names(gene2go.mean))
+        selected = intersect(selected, tested)
+
+        message(
+            '[', cell_type, ' | ', region, ' | ', direction, '] ',
+            length(selected), ' selected / ',
+            length(tested), ' tested genes'
+        )
+
+        if (length(selected) < 5)
+            return(NULL)
+
+        # topGO requires a numeric vector or factor.
+        # 1 = selected gene, 0 = background gene.
+        all.genes = rep(0, length(tested))
+        names(all.genes) = tested
+        all.genes[selected] = 1
+
+        GOdata = new(
+            'topGOdata',
+            description=paste(cell_type, region, direction),
+            ontology='BP',
+            allGenes=all.genes,
+            geneSelectionFun=function(x) x == 1,
+            nodeSize=10,
+            annotationFun=annFUN.gene2GO,
+            gene2GO=gene2go.mean
+        )
+
+        result = runTest(
+            GOdata,
+            algorithm='parentchild',
+            statistic='fisher'
+        )
+
+        pvals = score(result)
+
+        out = data.frame(
+            go_id=names(pvals),
+            pvalue=as.numeric(pvals),
+            stringsAsFactors=FALSE
+        )
+
+        out$qvalue = p.adjust(out$pvalue, method='fdr')
+
+        out$cell_type = cell_type
+        out$region = region
+        out$direction = direction
+        out$n_selected = length(selected)
+        out$n_tested = length(tested)
+
+        out = merge(
+            out,
+            go.terms[, c('go_id', 'go_name')],
+            by='go_id',
+            all.x=TRUE
+        )
+
+        out = out[
+            order(out$qvalue, out$pvalue),
+            c(
+                'cell_type', 'region', 'direction',
+                'go_id', 'go_name',
+                'pvalue', 'qvalue',
+                'n_selected', 'n_tested'
+            )
+        ]
+
+        out
+    }
+
+    mean.results = list()
+
+    for (ct in sort(unique(mean.df$cell_type))) {
+
+        for (rg in sort(unique(mean.df$region[mean.df$cell_type == ct]))) {
+
+            d = mean.df[
+                mean.df$cell_type == ct &
+                mean.df$region == rg,
+            ]
+
+            tested = unique(d$ensembl_id)
+
+            increase = unique(
+                d$ensembl_id[
+                    d$qvalue < opt$cutoff &
+                    d$beta > 0
+                ]
+            )
+
+            decrease = unique(
+                d$ensembl_id[
+                    d$qvalue < opt$cutoff &
+                    d$beta < 0
+                ]
+            )
+
+            r1 = run_mean_go(
+                tested, increase, ct, rg, 'increase'
+            )
+
+            r2 = run_mean_go(
+                tested, decrease, ct, rg, 'decrease'
+            )
+
+            if (!is.null(r1))
+                mean.results[[length(mean.results) + 1]] = r1
+
+            if (!is.null(r2))
+                mean.results[[length(mean.results) + 1]] = r2
+        }
+    }
+
+    if (length(mean.results) == 0)
+        stop('No mean-expression GO analyses produced results.')
+
+    mean.results = do.call(rbind, mean.results)
+    rownames(mean.results) = NULL
+
+    csv.out = file.path(
+        mean.out.dir,
+        'dglm_mean_expression_GO_results.csv'
+    )
+
+    rds.out = file.path(
+        mean.out.dir,
+        'dglm_mean_expression_GO_results.rds'
+    )
+
+    write.csv(mean.results, csv.out, row.names=FALSE)
+    saveRDS(mean.results, rds.out)
+
+    message('')
+    message('Mean-expression GO complete.')
+    message('CSV: ', csv.out)
+    message('RDS: ', rds.out)
+    message(
+        'Significant GO terms (q < ', opt$cutoff, '): ',
+        sum(mean.results$qvalue < opt$cutoff, na.rm=TRUE)
+    )
+
+    quit(save='no', status=0)
+}
+
+go.fraction.shared.cutoff = 1/3
+
+ckpt_suffix   = if (opt$dispersion == 'age_sex') paste0('_cutoff', opt$cutoff, '_agesex') else paste0('_cutoff', opt$cutoff)
+mashr_pattern = if (opt$dispersion == 'age_sex') '^combined_dglm_mashr_results_age_strong.*_lfsr.*\\.rds$' else '^combined_dglm_mashr_results_strong.*_lfsr.*\\.rds$'
+
+cell_type_dirs = list.dirs(opt$base_dir, recursive=FALSE)
+if (!is.null(opt$target_celltype)) {
+    cell_type_dirs = cell_type_dirs[basename(cell_type_dirs) == opt$target_celltype]
+    if (length(cell_type_dirs) == 0) stop('No directory found for --target_celltype ', opt$target_celltype)
+}
+
+# ── load this run's cell type(s) mashr objects ──────────────────────────────
+all_ct_data = list()
+all_genes_union = c()
+for (d in cell_type_dirs) {
+    ct = basename(d)
+    ckpt = file.path(d, paste0('dglm_checkpoints', ckpt_suffix))
+    f = list.files(ckpt, pattern=mashr_pattern, full.names=TRUE)
+    if (length(f) == 0) { message('[', ct, '] no mashr result found, skipping'); next }
+    obj = readRDS(f[1])
+    m = obj$mash
+    if (is.null(m)) next
+
+    mash.beta = get_pm(m)
+    mash.lfsr = get_lfsr(m)
+    mash.sbet = mash.beta / get_psd(m)
+
+    conds = colnames(mash.beta)
+    cond.parts = strsplit(conds, '\\|')
+    cond.sub = sapply(cond.parts, `[`, 1)
+    cond.rg  = sapply(cond.parts, `[`, 2)
+
+    is_opc_olig = grepl('^opc-olig_', cond.sub)
+    if (any(is_opc_olig)) {
+        suffix = sub('^opc-olig_', '', cond.sub[is_opc_olig])
+        cond.sub[is_opc_olig] = paste0(ct, '_', suffix)
+    }
+
+    all_ct_data[[ct]] = list(mash.beta=mash.beta, mash.lfsr=mash.lfsr, mash.sbet=mash.sbet,
+                              cond.sub=cond.sub, cond.rg=cond.rg, genes=rownames(mash.beta))
+    all_genes_union = union(all_genes_union, rownames(mash.beta))
+    message('[', ct, '] loaded: ', length(unique(cond.sub)), ' subcluster(s), ',
+            length(conds), ' condition(s), ', nrow(mash.beta), ' gene(s)')
+}
+message('Cell types loaded this run: ', length(all_ct_data), ' | gene union: ', length(all_genes_union))
+
+if (length(all_ct_data) == 0 && !opt$cache_only) stop('No cell type data loaded -- nothing to do')
+
+# ── GO gene annotations (biomaRt, cached, genome-wide -- shared across all
+#    cell-type runs, built from the FULL genome-wide gene set if --cache_only,
+#    or from whatever this run's own genes are otherwise) ──────────────────
+go.anno.file = file.path(opt$cache_dir, 'rnaseq_genes_go.rds')
+cache_gene_universe = if (opt$cache_only) all_genes_union else all_genes_union
+if (opt$ignore_checkpoints || !file.exists(go.anno.file)) {
+    if (!opt$cache_only && length(cell_type_dirs) < length(list.dirs(opt$base_dir, recursive=FALSE))) {
+        stop('GO annotation cache does not exist yet and this is a --target_celltype run. ',
+             'Run once with --cache_only first (no --target_celltype) to build the shared cache, ',
+             'then submit the per-cell-type jobs.')
+    }
+    library(biomaRt)
+    mmul = useEnsembl(biomart = 'ENSEMBL_MART_ENSEMBL', dataset = 'mmulatta_gene_ensembl')
+    mmul.go = getBM(
+        attributes = c('ensembl_gene_id', 'go_id'),
+        filters    = 'ensembl_gene_id',
+        values     = cache_gene_universe,
+        mart       = mmul
+    )
+    saveRDS(mmul.go, file = go.anno.file)
+} else {
+    message('Checkpoint found! Loading GO annotations from file.')
+    mmul.go = readRDS(go.anno.file)
+}
+
+gene2go = lapply(unique(mmul.go$ensembl_gene_id), function(x) {
+    out = sort(mmul.go[mmul.go$ensembl_gene_id == x, 'go_id'])
+    out[out != '']
+})
+names(gene2go) = unique(mmul.go$ensembl_gene_id)
+
+library(topGO)
+
+go.names.file = file.path(opt$cache_dir, 'rnaseq_go_names.rds')
+if (opt$ignore_checkpoints || !file.exists(go.names.file)) {
+    if (!opt$cache_only && length(cell_type_dirs) < length(list.dirs(opt$base_dir, recursive=FALSE))) {
+        stop('GO name cache does not exist yet and this is a --target_celltype run. ',
+             'Run once with --cache_only first.')
+    }
+    all.genes.dummy = numeric(length(gene2go))
+    names(all.genes.dummy) = names(gene2go)
+
+    go.topgo = new('topGOdata', description='Simple session', ontology='BP',
+                    allGenes=all.genes.dummy, geneSelectionFun=function(x) x>0,
+                    nodeSize=10, annotationFun=annFUN.gene2GO, gene2GO=gene2go)
+
+    go.ids = sort(union(mmul.go$go_id, go.topgo@graph@nodes))
+    go.ids = go.ids[nchar(go.ids) == 10]
+
+    library(GO.db)
+    go.terms = data.frame(
+        go_id        = go.ids,
+        go_namespace = Ontology(go.ids),
+        go_name      = Term(go.ids),
+        stringsAsFactors = FALSE
+    )
+
+    n.incomplete = sum(!complete.cases(go.terms))
+    if (n.incomplete > 0) {
+        message('Dropping ', n.incomplete, ' of ', nrow(go.terms),
+                ' GO term(s) with no namespace/name from GO.db (AmiGO fallback unavailable)')
+        go.terms = go.terms[complete.cases(go.terms), ]
+    }
+    rownames(go.terms) = go.terms$go_id
+    saveRDS(go.terms, file = go.names.file)
+} else {
+    message('Checkpoint found! Loading GO metadata from file.')
+    go.terms = readRDS(go.names.file)
+}
+
+if (opt$cache_only) {
+    message('--cache_only: cache built, exiting.')
+    quit(save='no', status=0)
+}
+
+# ── run one topGO test (unchanged algorithms from the original) ────────────
+run_go_test = function(all.genes.vec, direction, test, gene2go.this) {
+    sel.fun = if (direction == 'increase') function(x) x > 0 else function(x) x < 0
+
+    setMethod('GOKSTest',     signature(c(object='classicScore')), get.ks.pval)
+    setMethod('GOFisherTest', signature(c(object='classicCount')), get.fisher.pval)
+
+    topgo.obj = new('topGOdata', description='Simple session', ontology='BP',
+                     allGenes=all.genes.vec, geneSelectionFun=sel.fun,
+                     nodeSize=10, annotationFun=annFUN.gene2GO, gene2GO=gene2go.this)
+
+    if (test == 'FET') {
+        test.result  = runTest(topgo.obj, algorithm='parentchild', statistic='fisher')
+    } else {
+        test.result  = runTest(topgo.obj, algorithm='weight01', statistic='ks')
+    }
+    pval.df = melt(test.result@score)
+
+    setMethod('GOKSTest',     signature(c(object='classicScore')), get.ks.score)
+    setMethod('GOFisherTest', signature(c(object='classicCount')), get.fisher.score)
+
+    if (test == 'FET') {
+        score = runTest(topgo.obj, algorithm='classic', statistic='fisher')@score
+    } else {
+        score = runTest(topgo.obj, algorithm='weight01', statistic='ks')@score
+    }
+
+    data.frame(
+        go.terms[rownames(pval.df), ],
+        score = score,
+        pval  = pval.df$value,
+        qval  = p.adjust(pval.df$value, 'fdr'),
+        direction = direction,
+        test  = test,
+        stringsAsFactors = FALSE
+    )
+}
+
+# ── per cell type -> per subcluster: union-across-regions + per-region ─────
+all.results = list()
+
+for (ct in names(all_ct_data)) {
+    d = all_ct_data[[ct]]
+    gene2go.ct = gene2go[intersect(names(gene2go), d$genes)]
+
+    for (sc in sort(unique(d$cond.sub))) {
+        sc.cols = which(d$cond.sub == sc)
+        sc.regions = d$cond.rg[sc.cols]
+        n.regions.sc = length(sc.regions)
+        message('══════════════════════════════════════════')
+        message('Cell type: ', ct, ' | subcluster: ', sc, ' | regions: ', paste(sc.regions, collapse=', '))
+        message('══════════════════════════════════════════')
+
+        sc.lfsr = d$mash.lfsr[, sc.cols, drop=FALSE]
+        sc.beta = d$mash.beta[, sc.cols, drop=FALSE]
+        sc.sbet = d$mash.sbet[, sc.cols, drop=FALSE]
+        colnames(sc.lfsr) = colnames(sc.beta) = colnames(sc.sbet) = sc.regions
+
+        genes.this = d$genes
+
+        union.fet = numeric(length(genes.this)); names(union.fet) = genes.this
+        union.fet[names(which(unlist(lapply(genes.this, function(x) {
+            (sum(sc.lfsr[x,] < fsr.cutoff) >= go.fraction.shared.cutoff * n.regions.sc) &&
+                sum(sc.beta[x,][sc.lfsr[x,] < fsr.cutoff] > 0) >= go.fraction.shared.cutoff * n.regions.sc
+        }))))] = 1
+        union.fet[names(which(unlist(lapply(genes.this, function(x) {
+            (sum(sc.lfsr[x,] < fsr.cutoff) >= go.fraction.shared.cutoff * n.regions.sc) &&
+                sum(sc.beta[x,][sc.lfsr[x,] < fsr.cutoff] < 0) >= go.fraction.shared.cutoff * n.regions.sc
+        }))))] = -1
+
+        union.kst = numeric(length(genes.this)); names(union.kst) = genes.this
+        union.kst[rownames(sc.sbet)] = rowMeans(sc.sbet)
+
+        union.results = rbind(
+            within(run_go_test(union.fet, 'increase', 'FET', gene2go.ct), { set='union'; region='all' }),
+            within(run_go_test(union.fet, 'decrease', 'FET', gene2go.ct), { set='union'; region='all' }),
+            within(run_go_test(union.kst,  'increase', 'KS', gene2go.ct), { set='union'; region='all' }),
+            within(run_go_test(-union.kst, 'decrease', 'KS', gene2go.ct), { set='union'; region='all' })
+        )
+        union.results$subcluster = sc
+        union.results$parent_cell_type = ct
+        all.results[[paste0(ct, '_', sc, '_union')]] = union.results
+
+        region.results = do.call(rbind, lapply(sc.regions, function(r) {
+            this.fet = numeric(length(genes.this)); names(this.fet) = genes.this
+            this.fet[names(which(unlist(lapply(genes.this, function(x) sc.lfsr[x,r] < fsr.cutoff & sc.beta[x,r] > 0))))] =  1
+            this.fet[names(which(unlist(lapply(genes.this, function(x) sc.lfsr[x,r] < fsr.cutoff & sc.beta[x,r] < 0))))] = -1
+
+            this.kst = numeric(length(genes.this)); names(this.kst) = genes.this
+            this.kst[rownames(sc.sbet)] = sc.sbet[,r]
+
+            rbind(
+                within(run_go_test(this.fet, 'increase', 'FET', gene2go.ct), { set='one'; region=r }),
+                within(run_go_test(this.fet, 'decrease', 'FET', gene2go.ct), { set='one'; region=r }),
+                within(run_go_test(this.kst,  'increase', 'KS', gene2go.ct), { set='one'; region=r }),
+                within(run_go_test(-this.kst, 'decrease', 'KS', gene2go.ct), { set='one'; region=r })
+            )
+        }))
+        region.results$subcluster = sc
+        region.results$parent_cell_type = ct
+        all.results[[paste0(ct, '_', sc, '_regions')]] = region.results
+    }
+}
+
+go.enrichment.results = do.call(rbind, all.results)
+rownames(go.enrichment.results) = NULL
+go.enrichment.results$dataset = 'GO'
+
+out.suffix = if (!is.null(opt$target_celltype)) paste0('_', opt$target_celltype) else ''
+out.file = file.path(opt$out_dir, paste0('dglm_topgo_results_', opt$dispersion, out.suffix, '.rds'))
+saveRDS(go.enrichment.results, file = out.file)
+message('Saved: ', out.file)
+
+# ── region-specificity permutation test (per subcluster, 'one' set only) ───
+get_region_specificity = function(enrichment.results, target.subcluster, target.direction, target.test, n.permutations) {
+    this.df = subset(enrichment.results,
+                      dataset == 'GO' & subcluster == target.subcluster & direction == target.direction &
+                          set == 'one' & test == target.test)
+    this.df = subset(this.df, complete.cases(this.df))
+    if (nrow(this.df) == 0) return(NULL)
+
+    this.wide = tidyr::pivot_wider(droplevels(this.df), id_cols='go_id', names_from='region', values_from='score')
+    if (ncol(this.wide) < 3) return(NULL)
+
+    this.mat = matrix(as.matrix(this.wide[,2:ncol(this.wide)]), nrow=nrow(this.wide),
+                       ncol=ncol(this.wide)-1,
+                       dimnames=list(this.wide$go_id, colnames(this.wide)[2:ncol(this.wide)]))
+
+    specificity = apply(this.mat, 1, function(x) sort(x)[length(x)] - sort(x)[length(x)-1])
+    specificity.null = do.call(cbind, mclapply(1:n.permutations, function(i) {
+        apply(matrix(apply(this.mat, 2, sample), nrow=nrow(this.mat), dimnames=dimnames(this.mat)),
+              1, function(x) sort(x)[length(x)] - sort(x)[length(x)-1])
+    }, mc.cores=n.cores))
+
+    data.frame(
+        go_id     = rownames(this.mat),
+        subcluster = target.subcluster,
+        parent_cell_type = unique(subset(this.df, select='parent_cell_type'))$parent_cell_type[1],
+        dataset   = 'GO',
+        go_name   = as.character(unique(subset(this.df, select=c('go_id','go_name')))$go_name),
+        direction = target.direction,
+        test      = target.test,
+        top.region = colnames(this.mat)[apply(this.mat, 1, which.max)],
+        specificity,
+        specificity.pval = rowMeans(specificity < specificity.null),
+        specificity.qval = p.adjust(rowMeans(specificity < specificity.null), 'fdr')
+    )
+}
+
+message('Running region-specificity permutation tests (', opt$n_permutations, ' permutations)...')
+all.subclusters = unique(go.enrichment.results$subcluster)
+spec.results = list()
+for (sc in all.subclusters) {
+    for (dir in c('increase','decrease')) {
+        for (test in c('FET','KS')) {
+            r = get_region_specificity(go.enrichment.results, sc, dir, test, opt$n_permutations)
+            if (!is.null(r)) spec.results[[paste(sc, dir, test, sep='_')]] = r
+        }
+    }
+}
+go.specificity.results = do.call(rbind, spec.results)
+rownames(go.specificity.results) = NULL
+
+spec.out.file = file.path(opt$out_dir, paste0('dglm_go_specificity_results_', opt$dispersion, out.suffix, '.rds'))
+saveRDS(go.specificity.results, file = spec.out.file)
+message('Saved: ', spec.out.file)
+
+message('done.')

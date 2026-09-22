@@ -72,10 +72,10 @@ DIVERSITY_CT_LABELS = {
 
 REGIONS = ['ACC', 'CN', 'dlPFC', 'EC', 'HIP', 'IPP', 'lCb', 'M1', 'MB', 'mdTN', 'NAc']
 
-TICK_FS  = 13
-LABEL_FS = 15
-TITLE_FS = 14
-CBAR_FS  = 13
+TICK_FS  = 16
+LABEL_FS = 18
+TITLE_FS = 18
+CBAR_FS  = 15
 
 # PC-residual analysis (factor_analysis/) uses hyphens + splits OPC/OLIG
 PC_RESIDUAL_CT_ORDER = ["AST","BC","CER","EPEN","INH","EXC","MSN","MGL","MBN","OLIG","OPC","VASC"]

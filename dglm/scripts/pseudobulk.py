@@ -54,6 +54,10 @@ parser.add_argument('--target_region', type=str, default=None,
                     help='restrict to a single region (skip all others) -- for fast iteration/testing')
 parser.add_argument('--target_subcluster', type=str, default=None,
                     help='restrict to a single --subcluster_col value (skip all others) -- for fast iteration/testing')
+parser.add_argument('--min_cells_per_animal', type=int, default=1,
+                    help='exclude an individual animal from a region\'s pseudobulk entirely if it '
+                         'contributed fewer than this many cells to that specific subcluster x region '
+                         '(default 1 = no filtering, preserves prior behavior)')
 args = parser.parse_args()
 
 H5AD_MAP = {
@@ -98,6 +102,19 @@ def pseudobulk_one(obs, adata, label, gene_names_df):
         obs_r = obs[obs['region'] == region]
         if obs_r.empty:
             continue
+
+        if args.min_cells_per_animal > 1:
+            animal_cell_counts = obs_r['animal_id'].value_counts()
+            valid_animals = animal_cell_counts[animal_cell_counts >= args.min_cells_per_animal].index
+            n_before = obs_r['animal_id'].nunique()
+            obs_r = obs_r[obs_r['animal_id'].isin(valid_animals)]
+            n_after = obs_r['animal_id'].nunique()
+            if n_before != n_after:
+                print(f"  [{label}] {region}: excluded {n_before - n_after} animal(s) with "
+                      f"< {args.min_cells_per_animal} cells")
+            if obs_r.empty:
+                print(f"  [{label}] {region}: no animals remain after per-animal min-cell filter, skipping")
+                continue
 
         unique_animals = obs_r['animal_id'].unique()
         n_animals = len(unique_animals)

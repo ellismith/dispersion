@@ -117,3 +117,45 @@ cell.type.labels = c(
     oligodendrocytes      = 'OLIG',
     vascular_cells        = 'VASC'
 )
+
+# ── topGO custom score-extraction methods ──────────────────────────────────
+# Exact match to Chiou et al.'s brain_transcriptome_aging_bulk repo
+# (scripts/_include_options.R). topGO's built-in GOKSTest/GOFisherTest only
+# expose the p-value via the S4 'score' slot; these rewrites let the same
+# call return the raw test statistic instead (KS D-statistic / Fisher odds
+# ratio), by swapping which function is registered via setMethod() at
+# call time in the GO enrichment script.
+get.ks.pval = function (object)
+{
+    N <- numAllMembers(object)
+    na <- numMembers(object)
+    if (na == 0 || na == N)
+        return(1)
+    x.a <- rankMembers(object)
+    return(ks.test(x.a, seq_len(N)[-x.a], alternative = "greater")$p.value)
+}
+
+get.ks.score = function (object)
+{
+    N <- numAllMembers(object)
+    na <- numMembers(object)
+    if (na == 0 || na == N)
+        return(1)
+    x.a <- rankMembers(object)
+    return(ks.test(x.a, seq_len(N)[-x.a], alternative = "greater")$statistic)
+}
+
+get.fisher.pval = function (object)
+{
+    contMat <- contTable(object)
+    if (all(contMat == 0))
+        p.value <- 1
+    else p.value <- fisher.test(contMat, alternative = "greater")$p.value
+    return(p.value)
+}
+
+get.fisher.score = function (object)
+{
+    contMat <- contTable(object)
+    return(as.numeric(fisher.test(contMat, alternative = "greater")$estimate))
+}

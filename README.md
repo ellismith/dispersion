@@ -1,146 +1,103 @@
 # dispersion
 
-Analysis pipelines for age-associated changes in single-cell transcriptional
-variability/dispersion in the macaque brain aging dataset (U01), plus
-cross-pipeline comparison plots. Two independent methods are implemented and
-compared:
+Analysis pipelines for age-associated changes in transcriptional dispersion
+(variability) in the rhesus macaque brain aging snRNA-seq dataset (U01).
 
-- **`dglm/`** — DGLM-based approach (dispersion GLM: `mean ~ covariates`,
-  `dispersion ~ age[+sex]`), adapted from Chiou et al. 2022 (*Nat Neurosci*),
-  with mashr for effect-size sharing/shrinkage across regions and cell
-  types. See [`dglm/AGENTS.md`](dglm/AGENTS.md) for full pipeline order.
-- **`gene_variance/`** — Simpler OLS-based approach: between-individual
-  (`|residuals| ~ age + sex` on pseudobulk means) and within-individual
-  (per-animal cell-level variance `~ age + sex`) regressions. See
-  [`gene_variance/AGENTS.md`](gene_variance/AGENTS.md).
+- **`dglm/`** — DGLM dispersion pipeline adapted from Chiou et al. 2022
+  (*Nat Neurosci*), with mashr for effect sharing across cell types and
+  regions. Current, final pipeline described below.
+- **`gene_variance/`** — OLS-based between-/within-individual variance
+  regressions. See [`gene_variance/AGENTS.md`](gene_variance/AGENTS.md).
+- **`plotting_scripts/`** — shared style (`plot_style.py`: cell-type
+  abbreviations, region order, font sizes) and cross-method comparison plots.
 
-## `dglm/` — pseudobulk and DGLM fitting
+Results and figures live on ASU Sol under `/scratch/easmit31/dispersion/dglm/`
+and are not tracked in git.
 
-`pseudobulk.py` sums raw counts per animal x louvain-subcluster x region
-(no gene-level filtering at this stage; self-cleans stale output from
-prior runs on every rerun, so reruns into an existing directory are
-safe). Gene filtering happens downstream via `filter_percent_animals.R`:
-a gene is kept if its CPM is at least a chosen cutoff (0.5 for the current
-run) in at least 50% of that combo's animals (raw, non-TMM library
-sizes); each run writes a per-gene audit-trail CSV
-(`*_filter_stats_cutoff*.csv`) alongside the filtered matrix.
+---
 
-`dglm_model.R` fits DGLM per gene, per region, per subcluster:
-`expression ~ age + sex + mean_n_umi + n_cells` (mean submodel),
-`dispersion ~ age` (dispersion submodel, `dlink='log'`). Requires a
-minimum of 100 cells per animal per subcluster x region (`--min_cells`)
-to avoid unstable near-single-cell pseudobulk values. Output columns:
-`beta`, `bvar`, `pval`, `qval` (FDR-corrected per condition). `bvar` is
-the dispersion submodel's Std. Error directly — confirmed against the
-`dglm` package's own printed output — not a variance, despite the name
-(inherited from the original script this pipeline is adapted from).
+## `dglm/` — current pipeline ("mask1", Sept 2026)
 
-Scripts: `run_all_celltypes.sh` (pseudobulk all subclusters x regions per
-cell type), `filter_all_pseudobulk.sh` (CPM filter), `stage_filtered_for_dglm.sh`
-+ `run_dglm_for_celltype.sh` (stage filtered output, run DGLM per
-subcluster, collect into one shared checkpoints dir per cell type),
-`submit_dglm_louvain_pipeline.sh` (submits the full per-cell-type chain as
-Slurm jobs).
+Guiding rule: **quality control drops points, never animals or whole
+conditions** (the only condition-level filter is the 300-cell / 30-animal rule).
 
-## `dglm_mashr.R` — mashr fitting
+| Step | Script(s) | What it does |
+|---|---|---|
+| 1. Pseudobulk | `pseudobulk.py` | **Summed** raw counts per animal × cell type/subcluster × region. No cell or gene filters here. Stale outputs for a label are deleted before writing. |
+| 2. Gene filter | `filter_percent_animals.R` (loop: `filter_all_pseudobulk.sh`) | Keep genes with CPM ≥ 0.5 in ≥ 50% of animals; writes an audit trail. |
+| 3. DGLM | `run_dglm_for_celltype.sh` → `dglm_model.R` | Per subcluster × region, per gene — see below. |
+| 4. Condition filter | `assess_condition_sparsity.py`, `filter_conditions_for_mashr.R` | Keep conditions with ≥ 300 cells and ≥ 30 animals. lCb excluded for astrocytes, microglia, oligodendrocytes, opc, vascular_cells. |
+| 5. mashr | `dglm_mashr.R` | Combined mode (all cell type × region conditions pooled). `--shat_mode raw` (Shat = bvar). Strong subset: `qval_single` rule with `--strong_q 0.2` (DGLM q < 0.2 in ≥ 1 condition; one threshold for all cell types). Default `--strong_q 0.05` reproduces the earlier run. |
+| 6. FDR / master | `dglm_fdr_combined.R` | Writes `master_dglm_combined.tsv`. Significance = `mash_lfsr < 0.05`. |
+| 7. Plots / audit | `run_q02_plots.sh`, `run_all_plots_915.sh`, `funnel_audit.sh [cell_type]` | Figure suite; read-only per-step funnel audit. |
 
-Current approach: for each gene, fit a one-condition-at-a-time adaptive
-shrinkage model (`mash_1by1`) across all 127 subcluster x region
-conditions; a gene is selected into the "strong subset" if its resulting
-LFSR is significant (< 0.05) in at least one condition
-(`get_significant_results(m.1by1, thresh=0.05)`). That subset is used to
-learn data-driven covariance patterns — PCA (`cov_pca`, top 5 components)
-followed by extreme deconvolution (`cov_ed`, which accounts for
-measurement noise when estimating the true covariance structure). The
-resulting patterns are then applied directly to every gene in one
-`mash()` fit — no random-subset step, no null-correlation estimation;
-single-stage.
+### Step 3 detail (`dglm_model.R`)
 
-**`--shat_mode raw`** (Shat = `bvar` as-is, no `sqrt()`) is the parameter
-used for the current `GABAergic_neurons` run. `bvar` being confirmed as a
-genuine Std. Error is the direct justification — mashr's documentation
-specifies Std. Error as its expected input, and raw is that value
-untransformed. Two things worth flagging about this choice: (1) a
-separate calibration check (fraction of raw DGLM z-scores exceeding 1.96,
-expected ~5% under the null) found raw gives ~25% — too liberal — so this
-parameter is not treated as fully resolved; (2) the resulting strong
-subset for `GABAergic_neurons` is large under this setting (14,435 of
-15,568 genes, ~93%), consistent with that same calibration concern.
-`--shat_mode sqrt` remains the pipeline-wide default for the other 11
-cell types, unaffected by this choice.
+Within each subcluster × region, per gene:
 
-`dglm_mashr.R --approach {qval_third,qval_recurrence,lfsr_single}
---shat_mode {sqrt,raw}` — `lfsr_single` is the approach described above
-and the one in current use; `qval_third` and `qval_recurrence` are
-alternative strong-subset rules based on DGLM's own q-values rather than
-`mash_1by1`, kept in the script for comparison but not currently in use.
-Output filename includes both settings
-(`combined_dglm_mashr_results_<approach>_<shat_mode>.rds`) so results
-from different runs never collide in the same checkpoints directory.
+1. **Low-point mask** (set to NA before fitting): raw count ≤ 1, or value
+   below median − max(3 × MAD, 2). Removes count-0/1 "shelves" that come from
+   animals with too few cells, without dropping the animal.
+2. **Testability:** gene must be truly detected (count ≥ 2) in ≥ 50% of that
+   region's animals, and ≥ 10 animals must remain. The CPM ≥ 0.5 filter alone
+   is nearly vacuous at these library sizes (a single read already exceeds
+   0.5 CPM), so this real-detection rule is what enforces expression.
+3. TMM normalization + log-CPM (`edgeR`, `prior.count = 0.5`).
+4. `dglm(family = gaussian, dlink = "log")`; mean ~ covariates, dispersion ~ age.
+5. Dispersion p-values from `summary(res$dispersion.fit)`, **not** dglm's own
+   `dispersion.summary` (which fixes the Gamma scale at 2 and is
+   anti-conservative). BH q-values per condition.
 
-**Status:** `GABAergic_neurons`, 300-cell/30-animal filtered data
-(`disp_age__min300cells_min30animals/`), `--approach lfsr_single
---shat_mode raw` — run in progress. All 12 cell types' main pipeline
-results (unfiltered, both dispersion models) still use the prior default
-(`--approach qval_recurrence --shat_mode sqrt`), unaffected by this run.
+The output field `bvar` is a **standard error**, not a variance (name
+inherited from Chiou's original script).
 
-## `plotting_scripts/`
+### Result directories (Sol, `dglm/`)
 
-Cross-pipeline comparison plots between `dglm/` and `gene_variance/`:
-`plot_concordance_heatmap.py` / `plot_overlap.R` (significant-gene
-overlap), `plot_effect_scatter.py` / `plot_rank_correlation.py`
-(effect-size/rank correlation), `plot_heatmap_summary.py` (median
-standardized effect size; note: significance asterisks are currently
-disabled, hardcoded off), `plot_volcano.py` / `plot_mean_vs_variability.py`.
-For a DGLM-only volcano at cell-type or subcluster resolution, see
-`dglm/scripts/dglm_plot_volcano.R`. Most read from each pipeline's master
-FDR TSV — run `dglm_fdr.R`/`dglm_fdr_combined.R` and `fdr_correct.py` first.
+| Directory | Contents |
+|---|---|
+| `disp_age__raw_counts/` | Pseudobulk + CPM-filtered inputs |
+| `disp_age__mask1_915/` | DGLM fits, final model |
+| `disp_age__mask1_915_300c/` | Condition-filtered; mashr + FDR with strong q < 0.05 |
+| `disp_age__mask1_915_300c_q0.2/` | **Current:** mashr + FDR with strong q < 0.2 |
+| `figures_915/`, `figures_915q02/` | Figures for the two trees above |
+| `disp_age__FINAL_autosomeX*` | Pre-mask baseline, kept for comparison (copy in `BACKUP_baseline_20260914/`) |
+| `archive_pre_normalization_fix/`, `archive_pre_mask1/` | Superseded runs, kept for reference |
 
-## Environments
+Coverage: all 12 parent cell types have DGLM fits; mashr/FDR has been run for
+10 (basket_cells and cerebellar_neurons pending).
 
-- `mixed_models` (Python, `gene_variance/`); `latent_analysis` (Python,
-  `dglm/` — pseudobulking, plotting, the interactive explorer).
-- `mashr_env` (R — DGLM, mashr, FDR pooling, most plots). Missing a
-  C/Fortran toolchain (blocks `topGO`/`GO.db`/`biomaRt`) and missing
-  `estimate_null_correlation` (only affects `qval_third`/`qval_recurrence`,
-  which use `estimate_null_correlation_simple` instead). GO enrichment
-  uses a separate `go_env` conda env.
+### Validation
 
-## Cluster conventions
+- **Calibration** (after the extraction fix; GABAergic_0 × ACC, 10,170 genes):
+  5.92% of genes p < 0.05 for real age vs 6.07% for permuted age.
+- **Mask:** checked by hand refits. For example, NAP1L1 in GABAergic_16 × dlPFC
+  went from β −0.42 to +0.05 once two count-0 animals were masked, and a saved
+  ADAMTS6 β (−0.724) was reproduced by refit (−0.719).
+- **Dispersion decreases are not a mask artifact.** In astrocytes_6 × ACC,
+  masked and kept animals have the same mean age (10.60 vs 10.70), and the
+  strongest decreasing gene keeps its sign with no mask applied.
 
-ASU Sol (SLURM). Working directory `/scratch/easmit31/dispersion/`.
-**Long-running jobs must use `sbatch`**, not an interactive
-`salloc`/`srun` session — those die silently on disconnect even though
-`squeue` makes them look like real background jobs (check `sacct`'s
-`JobName`; `interacti+` means it wasn't detached). Partition guide: `htc`
-(4hr cap, best default availability) for most jobs; `public`/`highmem`
-(7-day cap) for jobs needing more time or memory, though `public` can
-have longer queue waits if its nodes are reserved/drained. Never
-overwrite an mashr/FDR result worth keeping — use a distinct directory
-name for any variant run.
+### Open items
 
-## Data
+- Sex effects (dispersion ~ age + sex, and the mean-model sex coefficient)
+  not yet run on the final model.
+- mashr for basket_cells and cerebellar_neurons.
+- Small-N regions (e.g. CN, ~12 animals) looked miscalibrated in an earlier
+  pre-mask check; not re-checked under the final model.
+- Oligodendrocyte files keep an `opc-olig_` filename prefix (harmless).
 
-h5ads: `/scratch/nsnyderm/u01/intermediate_files/cell-class_h5ad_update`
-(mapped per cell type in `pseudobulk.py`'s `H5AD_MAP`). Human-macaque
-ortholog map:
-`/scratch/easmit31/data/human-macaque-orthologs/ensembl113_mmul10_macaque_human.csv`.
-Autosome+X gene keep-list:
-`/scratch/easmit31/dispersion/dglm/autosome_x_genes.csv`.
+### Superseded approaches (for context)
 
-opc and oligodendrocytes share a raw subcluster label prefix from their
-common source clustering but are genuinely separate populations, split
-correctly at the pseudobulk stage (opc = subclusters 12,13;
-oligodendrocytes = 0-11) — plotting scripts and the explorer relabel these
-for display.
+Each of these was tried and replaced; the runs are in the archive directories.
 
-## Interactive explorer
-
-`scripts/build_dglm_explorer.py` reads master TSVs directly (pandas, no
-R/mashr/`.rds`) and writes `dglm_explorer.html`. Unit selector has three
-tiers (all subclusters summed, one cell type, one subcluster); a region
-checkbox filter applies across every tab; heatmap tab has a numeric-value
-toggle. **Pending:** a "Method" dropdown to show the current
-`GABAergic_neurons` run alongside the pipeline-default result once it
-finishes — scoped to that cell type only, since no other cell type has
-more than one method's results yet.
+- Mean-aggregated pseudobulk was replaced by summed counts.
+- Fitting raw counts was replaced by fitting TMM log-CPM.
+- The `dispersion.summary` p-value extraction was replaced by `dispersion.fit`
+  (see step 3).
+- Rejected fixes for low-cell animals: per-animal minimum-cell filters (10 and
+  100 cells), a 3SD + <20-cell outlier rule, and a condition filter on median
+  cells per animal. All of these dropped animals or whole conditions.
+- Rejected ways of adjusting standard errors: the sqrt(bvar) vs raw-bvar Shat
+  comparison (settled on raw) and a genomic-control rescaling.
+- The `qval_tenth` recurrence rule for the strong subset was replaced by
+  `qval_single`.

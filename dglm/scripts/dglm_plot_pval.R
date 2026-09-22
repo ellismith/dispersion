@@ -35,7 +35,9 @@ save_fig = function(p, name, height=5, width=8) {
 }
 
 # ── load results ──────────────────────────────────────────────────────────
-in.file = file.path(opt$checkpoints, paste0(cell.type, '_dglm_mashr_results.rds'))
+in.file = list.files(opt$checkpoints, pattern=paste0('^', cell.type, '_dglm_mashr_results_strong.*_lfsr.*\.rds$'), full.names=TRUE)
+if (length(in.file) == 0) stop('No mashr results file found for ', cell.type, ' in ', opt$checkpoints)
+if (length(in.file) > 1) { message('Multiple mashr result files found, using most recent: '); in.file = in.file[order(file.mtime(in.file), decreasing=TRUE)][1] }
 message('Loading ', in.file)
 obj          = readRDS(in.file)
 dglm.results = obj$dglm_results
